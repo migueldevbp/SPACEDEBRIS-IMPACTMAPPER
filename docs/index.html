@@ -1,0 +1,2492 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>🌍 SpaceDebris Impact Mapper</title>
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.115/Build/Cesium/Cesium.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.115/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --primary-color: #3498db;
+      --danger-color: #e74c3c;
+      --success-color: #27ae60;
+      --warning-color: #f39c12;
+      --purple-color: #9b59b6;
+      --dark-color: #1a1a2e;
+      --darker-color: #16213e;
+    }
+    
+    * {
+      box-sizing: border-box;
+    }
+    
+    body { 
+      margin: 0; 
+      font-family: 'Arial', sans-serif; 
+      background: #111; 
+      color: #eee; 
+      overflow: hidden;
+    }
+    
+    #cesiumContainer { 
+      width: 100%; 
+      height: 100vh; 
+      display: block; 
+      position: relative;
+    }
+    
+    /* Efecto de onda de choque animada */
+    .shockwave {
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 100;
+      transform: translate(-50%, -50%);
+      mix-blend-mode: screen;
+      animation: shockwave 2s ease-out forwards;
+    }
+    
+    @keyframes shockwave {
+      0% {
+        width: 0;
+        height: 0;
+        opacity: 1;
+        box-shadow: 
+          0 0 0 0px rgba(255, 50, 50, 0.8),
+          0 0 0 0px rgba(255, 150, 50, 0.7),
+          0 0 0 0px rgba(255, 200, 50, 0.6);
+      }
+      50% {
+        opacity: 0.8;
+      }
+      100% {
+        width: 600px;
+        height: 600px;
+        opacity: 0;
+        box-shadow: 
+          0 0 0 100px rgba(255, 50, 50, 0),
+          0 0 0 200px rgba(255, 150, 50, 0),
+          0 0 0 300px rgba(255, 200, 50, 0);
+      }
+    }
+    
+    /* Efecto de partículas */
+    .particles-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 99;
+    }
+    
+    .particle {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      pointer-events: none;
+      animation: particleFly 1.5s ease-out forwards;
+    }
+    
+    @keyframes particleFly {
+      0% {
+        transform: translate(0, 0);
+        opacity: 1;
+      }
+      100% {
+        transform: translate(var(--tx), var(--ty));
+        opacity: 0;
+      }
+    }
+    
+    /* Panel de control izquierdo - Mejorado */
+    .control-panel {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      width: 300px;
+      background: rgba(26, 26, 26, 0.98);
+      border: 1px solid #444;
+      border-radius: 12px;
+      padding: 15px;
+      z-index: 1000;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.6);
+      backdrop-filter: blur(10px);
+      transition: all 0.3s ease;
+    }
+    
+    .control-panel:hover {
+      box-shadow: 0 12px 35px rgba(0,0,0,0.8);
+    }
+    
+    .panel-header {
+      text-align: center;
+      margin-bottom: 15px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid var(--primary-color);
+    }
+    
+    .panel-header h3 {
+      margin: 0;
+      color: #fff;
+      font-size: 18px;
+      font-weight: bold;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    }
+    
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    
+    .form-group {
+      margin-bottom: 8px;
+    }
+    
+    .form-group.full-width {
+      grid-column: 1 / -1;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 4px;
+      font-weight: bold;
+      color: #ccc;
+      font-size: 12px;
+    }
+    
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #444;
+      border-radius: 6px;
+      background: rgba(40, 40, 40, 0.8);
+      color: #fff;
+      font-size: 12px;
+      transition: all 0.3s ease;
+    }
+    
+    .form-group input:focus, .form-group select:focus {
+      border-color: var(--primary-color);
+      outline: none;
+      box-shadow: 0 0 8px rgba(52, 152, 219, 0.4);
+      transform: translateY(-2px);
+    }
+    
+    .buttons-container {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    
+    .action-btn {
+      padding: 10px 15px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: bold;
+      transition: all 0.3s ease;
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    
+    .simulate-btn {
+      background: linear-gradient(135deg, var(--danger-color), #c0392b);
+      color: white;
+      box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
+    }
+    
+    .report-btn {
+      background: linear-gradient(135deg, var(--primary-color), #2980b9);
+      color: white;
+      box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+    }
+    
+    .action-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+    }
+    
+    .action-btn:active {
+      transform: translateY(-1px);
+    }
+    
+    .info-text {
+      font-size: 10px;
+      color: #888;
+      text-align: center;
+      margin-top: 12px;
+      line-height: 1.4;
+      padding: 8px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 6px;
+    }
+    
+    .whatsapp-link {
+      display: block;
+      margin-top: 8px;
+      color: #25D366;
+      text-decoration: none;
+      font-size: 10px;
+      transition: color 0.3s ease;
+    }
+    
+    .whatsapp-link:hover {
+      color: #128C7E;
+      text-decoration: underline;
+    }
+    
+    .menu-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    
+    .menu-btn {
+      padding: 10px 12px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: bold;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    
+    .nasa-eyes-btn {
+      background: linear-gradient(135deg, #1a237e, #283593);
+      color: white;
+      box-shadow: 0 4px 12px rgba(26, 35, 126, 0.3);
+    }
+    
+    .capitals-btn {
+      background: linear-gradient(135deg, #27ae60, #219653);
+      color: white;
+      box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);
+    }
+    
+    .info-btn {
+      background: linear-gradient(135deg, var(--success-color), #219653);
+      color: white;
+      box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);
+    }
+    
+    .menu-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+    }
+    
+    /* Paneles del lado derecho - Mejorados */
+    .right-panels {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 340px;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .collapsible-panel {
+      background: rgba(26, 26, 26, 0.98);
+      border: 1px solid #444;
+      border-radius: 12px;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.6);
+      backdrop-filter: blur(10px);
+      transition: all 0.3s ease-in-out;
+      overflow: hidden;
+    }
+    
+    .collapsible-panel:hover {
+      box-shadow: 0 12px 35px rgba(0,0,0,0.8);
+    }
+    
+    .panel-header-collapsible {
+      padding: 12px 15px;
+      border-bottom: 1px solid #444;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(40, 40, 40, 0.9);
+      transition: all 0.3s ease;
+    }
+    
+    .panel-header-collapsible:hover {
+      background: rgba(50, 50, 50, 0.9);
+    }
+    
+    .panel-header-collapsible h3 {
+      margin: 0;
+      color: #fff;
+      font-size: 14px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .toggle-icon {
+      transition: transform 0.3s ease;
+      font-size: 12px;
+      color: var(--primary-color);
+    }
+    
+    .collapsed .toggle-icon {
+      transform: rotate(-90deg);
+    }
+    
+    .panel-content {
+      padding: 15px;
+      max-height: 400px;
+      overflow-y: auto;
+      transition: all 0.3s ease;
+    }
+    
+    .collapsed .panel-content {
+      display: none;
+    }
+    
+    /* Panel de Capitales */
+    .capitals-panel {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.9);
+      width: 85%;
+      height: 85%;
+      background: linear-gradient(135deg, var(--dark-color), var(--darker-color));
+      border: 2px solid var(--success-color);
+      border-radius: 18px;
+      z-index: 2000;
+      display: none;
+      box-shadow: 0 0 50px rgba(39, 174, 96, 0.7);
+      overflow: hidden;
+      opacity: 0;
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      backdrop-filter: blur(10px);
+    }
+    
+    .capitals-panel.show {
+      display: flex;
+      flex-direction: column;
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+    
+    .capitals-header {
+      padding: 20px 25px;
+      background: linear-gradient(135deg, var(--success-color), #219653);
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .capitals-header h2 {
+      margin: 0;
+      color: #fff;
+      font-size: 22px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    
+    .capitals-controls {
+      padding: 15px 25px;
+      background: rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      display: flex;
+      gap: 10px;
+    }
+    
+    .search-input {
+      flex: 1;
+      padding: 10px 15px;
+      border: 1px solid #444;
+      border-radius: 8px;
+      background: rgba(40, 40, 40, 0.8);
+      color: #fff;
+      font-size: 14px;
+    }
+    
+    .search-input:focus {
+      outline: none;
+      border-color: var(--success-color);
+    }
+    
+    .filter-select {
+      padding: 10px 15px;
+      border: 1px solid #444;
+      border-radius: 8px;
+      background: rgba(40, 40, 40, 0.8);
+      color: #fff;
+      font-size: 14px;
+      min-width: 150px;
+    }
+    
+    .capitals-content {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 15px;
+    }
+    
+    .capital-card {
+      background: linear-gradient(135deg, rgba(50, 50, 50, 0.8), rgba(70, 70, 70, 0.6));
+      border: 1px solid #555;
+      border-radius: 12px;
+      padding: 15px;
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+    
+    .capital-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+      border-color: var(--success-color);
+    }
+    
+    .capital-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    
+    .flag {
+      width: 40px;
+      height: 25px;
+      border-radius: 3px;
+      object-fit: cover;
+      border: 1px solid #444;
+    }
+    
+    .capital-name {
+      font-weight: bold;
+      color: #fff;
+      font-size: 16px;
+    }
+    
+    .country-name {
+      color: #ccc;
+      font-size: 12px;
+    }
+    
+    .capital-details {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      font-size: 12px;
+    }
+    
+    .detail-item {
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .detail-label {
+      color: #888;
+      font-size: 10px;
+      margin-bottom: 2px;
+    }
+    
+    .detail-value {
+      color: #fff;
+      font-weight: bold;
+    }
+    
+    .capital-actions {
+      margin-top: 12px;
+      display: flex;
+      gap: 8px;
+    }
+    
+    .capital-btn {
+      flex: 1;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: bold;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+    }
+    
+    .view-btn {
+      background: linear-gradient(135deg, var(--primary-color), #2980b9);
+      color: white;
+    }
+    
+    .simulate-btn-sm {
+      background: linear-gradient(135deg, var(--danger-color), #c0392b);
+      color: white;
+    }
+    
+    .capital-btn:hover {
+      transform: translateY(-2px);
+    }
+    
+    /* Panel de datos de asteroides - Mejorado */
+    .asteroid-item {
+      background: linear-gradient(135deg, rgba(50, 50, 50, 0.8), rgba(70, 70, 70, 0.6));
+      border: 1px solid #555;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .asteroid-item::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+      transition: left 0.5s ease;
+    }
+    
+    .asteroid-item:hover {
+      background: linear-gradient(135deg, rgba(70, 70, 70, 0.9), rgba(90, 90, 90, 0.7));
+      border-color: var(--danger-color);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    
+    .asteroid-item:hover::before {
+      left: 100%;
+    }
+    
+    .asteroid-name {
+      font-weight: bold;
+      color: var(--primary-color);
+      font-size: 13px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .asteroid-data {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      font-size: 10px;
+    }
+    
+    .data-label {
+      color: #ccc;
+    }
+    
+    .data-value {
+      color: #fff;
+      font-weight: bold;
+    }
+    
+    .hazardous {
+      color: var(--danger-color);
+      font-weight: bold;
+    }
+    
+    .safe {
+      color: var(--success-color);
+      font-weight: bold;
+    }
+    
+    .loading {
+      text-align: center;
+      color: #888;
+      font-size: 11px;
+      padding: 15px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+    }
+    
+    .risk-high {
+      border-left: 4px solid var(--danger-color);
+    }
+    
+    .risk-medium {
+      border-left: 4px solid var(--warning-color);
+    }
+    
+    .risk-low {
+      border-left: 4px solid var(--success-color);
+    }
+    
+    /* Botones de acción en paneles */
+    .panel-action-btn {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: bold;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    
+    .refresh-btn {
+      background: linear-gradient(135deg, var(--purple-color), #8e44ad);
+      color: white;
+      box-shadow: 0 4px 12px rgba(155, 89, 182, 0.3);
+    }
+    
+    .panel-action-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+    }
+    
+    /* Estrategias y escenarios - Mejorados */
+    .strategy-item, .scenario-item {
+      background: linear-gradient(135deg, rgba(50, 50, 50, 0.8), rgba(70, 70, 70, 0.6));
+      border: 1px solid #555;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
+      font-size: 11px;
+      transition: all 0.3s ease;
+    }
+    
+    .strategy-item:hover, .scenario-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    
+    .strategy-title, .scenario-title {
+      font-weight: bold;
+      color: var(--danger-color);
+      font-size: 12px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .strategy-desc, .scenario-desc {
+      color: #ccc;
+      font-size: 10px;
+      line-height: 1.4;
+    }
+    
+    /* Intercambio social - Mejorado */
+    .social-form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .social-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    
+    .social-btn {
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 10px;
+      font-weight: bold;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    
+    .whatsapp-btn-sm {
+      background: linear-gradient(135deg, #25D366, #128C7E);
+      color: white;
+      box-shadow: 0 4px 12px rgba(37, 211, 102, 0.3);
+    }
+    
+    .twitter-btn-sm {
+      background: linear-gradient(135deg, #1DA1F2, #0d8bd9);
+      color: white;
+      box-shadow: 0 4px 12px rgba(29, 161, 242, 0.3);
+    }
+    
+    .sms-btn-sm {
+      background: linear-gradient(135deg, var(--purple-color), #8e44ad);
+      color: white;
+      box-shadow: 0 4px 12px rgba(155, 89, 182, 0.3);
+    }
+    
+    .email-btn-sm {
+      background: linear-gradient(135deg, var(--danger-color), #c0392b);
+      color: white;
+      box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
+    }
+    
+    .social-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+    }
+    
+    /* Panel de NASA Eyes - Mejorado */
+    .nasa-eyes-panel {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 90%;
+      height: 85%;
+      background: rgba(0, 0, 0, 0.98);
+      border: 2px solid var(--primary-color);
+      border-radius: 16px;
+      z-index: 2000;
+      display: none;
+      box-shadow: 0 0 50px rgba(52, 152, 219, 0.6);
+      overflow: hidden;
+      backdrop-filter: blur(10px);
+    }
+    
+    .nasa-eyes-panel.show {
+      display: flex;
+      flex-direction: column;
+      animation: modalAppear 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    
+    .nasa-header {
+      padding: 18px;
+      background: linear-gradient(135deg, #1a237e, #283593);
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .nasa-header h3 {
+      margin: 0;
+      color: #fff;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .close-btn {
+      background: var(--danger-color);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 35px;
+      height: 35px;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
+    }
+    
+    .close-btn:hover {
+      background: #c0392b;
+      transform: rotate(90deg);
+    }
+    
+    .nasa-iframe {
+      flex: 1;
+      border: none;
+      border-radius: 0 0 14px 14px;
+    }
+    
+    /* Panel de Reporte Animado - Mejorado */
+    .report-panel {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.8);
+      width: 85%;
+      max-width: 650px;
+      max-height: 85vh;
+      background: linear-gradient(135deg, var(--dark-color), var(--darker-color));
+      border: 2px solid var(--primary-color);
+      border-radius: 18px;
+      z-index: 2000;
+      display: none;
+      box-shadow: 0 0 50px rgba(52, 152, 219, 0.7);
+      overflow: hidden;
+      opacity: 0;
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      backdrop-filter: blur(10px);
+    }
+    
+    .report-panel.show {
+      display: block;
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+    
+    .report-header {
+      padding: 20px 25px;
+      background: linear-gradient(135deg, var(--primary-color), #2980b9);
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .report-header h2 {
+      margin: 0;
+      color: #fff;
+      font-size: 22px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    
+    .report-content {
+      padding: 25px;
+      max-height: calc(85vh - 150px);
+      overflow-y: auto;
+    }
+    
+    .report-section {
+      margin-bottom: 25px;
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      border-left: 4px solid var(--primary-color);
+      transition: all 0.3s ease;
+    }
+    
+    .report-section:hover {
+      background: rgba(255, 255, 255, 0.08);
+      transform: translateY(-2px);
+    }
+    
+    .report-section h3 {
+      margin: 0 0 15px 0;
+      color: var(--primary-color);
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .data-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    
+    .data-item {
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      font-size: 13px;
+      transition: all 0.3s ease;
+    }
+    
+    .data-item:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+    
+    .data-item strong {
+      color: var(--danger-color);
+    }
+    
+    .impact-zones {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .zone {
+      padding: 18px;
+      border-radius: 10px;
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.3s ease;
+    }
+    
+    .zone:hover {
+      transform: translateX(8px);
+    }
+    
+    .zone-total {
+      background: linear-gradient(135deg, var(--danger-color), #c0392b);
+    }
+    
+    .zone-severe {
+      background: linear-gradient(135deg, #e67e22, #d35400);
+    }
+    
+    .zone-light {
+      background: linear-gradient(135deg, #f39c12, #e67e22);
+      color: #333;
+    }
+    
+    .zone-info {
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .zone-radius {
+      font-size: 20px;
+      font-weight: bold;
+    }
+    
+    .zone-desc {
+      font-size: 12px;
+      opacity: 0.9;
+    }
+    
+    /* Botones de compartir - Mejorados */
+    .share-section {
+      margin-top: 25px;
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+    
+    .share-section:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
+    
+    .share-section h3 {
+      margin: 0 0 18px 0;
+      color: var(--primary-color);
+      font-size: 16px;
+    }
+    
+    .share-buttons {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    
+    .share-btn {
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: bold;
+      transition: all 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      color: white;
+    }
+    
+    .share-btn i {
+      font-size: 22px;
+    }
+    
+    .whatsapp-btn {
+      background: linear-gradient(135deg, #25D366, #128C7E);
+    }
+    
+    .sms-btn {
+      background: linear-gradient(135deg, var(--purple-color), #8e44ad);
+    }
+    
+    .email-btn {
+      background: linear-gradient(135deg, var(--danger-color), #c0392b);
+    }
+    
+    .twitter-btn {
+      background: linear-gradient(135deg, #1DA1F2, #0d8bd9);
+    }
+    
+    .facebook-btn {
+      background: linear-gradient(135deg, #4267B2, #365899);
+    }
+    
+    .copy-btn {
+      background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+    }
+    
+    .share-btn:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+    }
+    
+    /* Animaciones */
+    @keyframes modalAppear {
+      from { 
+        opacity: 0; 
+        transform: translate(-50%, -48%) scale(0.9);
+      }
+      to { 
+        opacity: 1; 
+        transform: translate(-50%, -50%) scale(1);
+      }
+    }
+    
+    /* Overlay para modales */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 1999;
+      display: none;
+      backdrop-filter: blur(5px);
+    }
+    
+    .modal-overlay.show {
+      display: block;
+      animation: fadeIn 0.3s ease-in-out;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    /* Notificaciones */
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    
+    @keyframes slideOut {
+      from { transform: translateX(0); opacity: 1; }
+      to { transform: translateX(100%); opacity: 0; }
+    }
+    
+    /* Responsive Design */
+    @media (max-width: 1200px) {
+      .control-panel {
+        width: 280px;
+      }
+      
+      .right-panels {
+        width: 320px;
+      }
+      
+      .capitals-content {
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      }
+    }
+    
+    @media (max-width: 768px) {
+      .control-panel {
+        width: 260px;
+        padding: 12px;
+      }
+      
+      .right-panels {
+        width: 300px;
+      }
+      
+      .form-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      
+      .report-panel, .capitals-panel {
+        width: 95%;
+      }
+      
+      .share-buttons {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      
+      .capitals-content {
+        grid-template-columns: 1fr;
+      }
+      
+      .capitals-controls {
+        flex-direction: column;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .control-panel {
+        width: calc(100% - 20px);
+        left: 10px;
+        right: 10px;
+      }
+      
+      .right-panels {
+        position: relative;
+        width: calc(100% - 20px);
+        margin: 10px;
+        top: auto;
+        right: auto;
+      }
+      
+      .nasa-eyes-panel,
+      .report-panel,
+      .capitals-panel {
+        width: 98%;
+        height: 90%;
+      }
+    }
+    
+    /* Scrollbar personalizado */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: rgba(255,255,255,0.05);
+      border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: var(--primary-color);
+      border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: #2980b9;
+    }
+  </style>
+</head>
+<body>
+  <!-- Overlay para modales -->
+  <div class="modal-overlay" id="modalOverlay" onclick="closeAllModals()"></div>
+
+  <!-- Panel de control izquierdo -->
+  <div class="control-panel">
+    <div class="panel-header">
+      <h3>ASTEROID IMPACT SIMULATOR</h3>
+    </div>
+    
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="diameter"><i class="fas fa-arrows-alt-h"></i> Diámetro (m):</label>
+        <input id="diameter" type="number" value="50" min="1" max="10000">
+      </div>
+      
+      <div class="form-group">
+        <label for="density"><i class="fas fa-weight-hanging"></i> Densidad (kg/m³):</label>
+        <input id="density" type="number" value="3000" min="1000" max="8000">
+      </div>
+      
+      <div class="form-group">
+        <label for="velocity"><i class="fas fa-tachometer-alt"></i> Velocidad (km/s):</label>
+        <input id="velocity" type="number" value="17" min="1" max="72" step="0.1">
+      </div>
+      
+      <div class="form-group">
+        <label for="angle"><i class="fas fa-angle-right"></i> Ángulo (°):</label>
+        <input id="angle" type="number" value="45" min="0" max="90" step="1">
+      </div>
+      
+      <div class="form-group full-width">
+        <label for="lat"><i class="fas fa-globe-americas"></i> Latitud:</label>
+        <input id="lat" type="number" value="-23.5" min="-90" max="90" step="0.0001">
+      </div>
+      
+      <div class="form-group full-width">
+        <label for="lon"><i class="fas fa-globe-americas"></i> Longitud:</label>
+        <input id="lon" type="number" value="-46.6" min="-180" max="180" step="0.0001">
+      </div>
+    </div>
+    
+    <div class="buttons-container">
+      <button class="action-btn simulate-btn" onclick="simulate()">
+        <i class="fas fa-rocket"></i> Simular
+      </button>
+      <button class="action-btn report-btn" onclick="openReport()">
+        <i class="fas fa-chart-bar"></i> Reportes
+      </button>
+    </div>
+    
+    <div class="info-text">
+      <i class="fas fa-lightbulb"></i> Click en el mapa para cambiar coordenadas
+      <a href="https://wa.me/?text=¡Echa%20un%20vistazo%20a%20esta%20increíble%20herramienta%20de%20simulación%20de%20impactos%20de%20asteroides!%20🌍%20SpaceDebris%20Impact%20Mapper%20-%20https://spacedebris-impact-mapper.com" 
+         class="whatsapp-link" target="_blank">
+        <i class="fab fa-whatsapp"></i> Compartir esta web por WhatsApp
+      </a>
+    </div>
+    
+    <div class="menu-buttons">
+      <button class="menu-btn nasa-eyes-btn" onclick="openNasaEyes()">
+        <i class="fas fa-globe-americas"></i> NASA EYES ON ASTEROIDS
+      </button>
+      <button class="menu-btn capitals-btn" onclick="openCapitalsPanel()">
+        <i class="fas fa-flag"></i> CAPITALES DEL MUNDO
+      </button>
+      <button class="menu-btn info-btn" onclick="toggleDevelopers()">
+        <i class="fas fa-info-circle"></i> INFO DEL EQUIPO
+      </button>
+    </div>
+  </div>
+
+  <!-- Paneles del lado derecho -->
+  <div class="right-panels">
+    <!-- Panel de Asteroides -->
+    <div class="collapsible-panel" id="asteroidsPanel">
+      <div class="panel-header-collapsible" onclick="togglePanel('asteroidsPanel')">
+        <h3><i class="fas fa-satellite"></i> ASTEROIDES CERCANOS</h3>
+        <span class="toggle-icon">▼</span>
+      </div>
+      <div class="panel-content">
+        <div class="info-text">
+          <i class="fas fa-sync-alt"></i> Datos en tiempo real de NASA NeoWs
+        </div>
+        
+        <button class="panel-action-btn refresh-btn" onclick="loadAsteroidData(); event.stopPropagation();">
+          <i class="fas fa-redo-alt"></i> Actualizar Datos
+        </button>
+        
+        <div id="asteroidsList">
+          <div class="loading"><i class="fas fa-satellite-dish"></i> Cargando datos de asteroides...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel de Estrategias de Defensa -->
+    <div class="collapsible-panel" id="defensePanel">
+      <div class="panel-header-collapsible" onclick="togglePanel('defensePanel')">
+        <h3><i class="fas fa-shield-alt"></i> ESTRATEGIAS DEFENSA</h3>
+        <span class="toggle-icon">▼</span>
+      </div>
+      <div class="panel-content">
+        <div class="info-text">
+          <i class="fas fa-user-astronaut"></i> Estrategias de defensa planetaria de NASA
+        </div>
+        
+        <button class="panel-action-btn refresh-btn" onclick="loadDefenseStrategies(); event.stopPropagation();">
+          <i class="fas fa-redo-alt"></i> Cargar Estrategias
+        </button>
+        
+        <div id="defenseStrategies">
+          <div class="loading"><i class="fas fa-shield-alt"></i> Cargando estrategias de defensa...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel de Escenarios de Mitigación -->
+    <div class="collapsible-panel" id="mitigationPanel">
+      <div class="panel-header-collapsible" onclick="togglePanel('mitigationPanel')">
+        <h3><i class="fas fa-bullseye"></i> ESCENARIOS MITIGACIÓN</h3>
+        <span class="toggle-icon">▼</span>
+      </div>
+      <div class="panel-content">
+        <div class="info-text">
+          <i class="fas fa-project-diagram"></i> Escenarios de impacto y mitigación
+        </div>
+        
+        <button class="panel-action-btn refresh-btn" onclick="loadMitigationScenarios(); event.stopPropagation();">
+          <i class="fas fa-redo-alt"></i> Cargar Escenarios
+        </button>
+        
+        <div id="mitigationScenarios">
+          <div class="loading"><i class="fas fa-bullseye"></i> Cargando escenarios de mitigación...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel de Intercambio Social -->
+    <div class="collapsible-panel" id="socialPanel">
+      <div class="panel-header-collapsible" onclick="togglePanel('socialPanel')">
+        <h3><i class="fas fa-share-alt"></i> INTERCAMBIO SOCIAL</h3>
+        <span class="toggle-icon">▼</span>
+      </div>
+      <div class="panel-content">
+        <div class="info-text">
+          <i class="fas fa-broadcast-tower"></i> Comparte datos de impacto por redes sociales
+        </div>
+        
+        <div class="social-form">
+          <div class="form-group">
+            <label for="countryCode"><i class="fas fa-flag"></i> Código de País:</label>
+            <select id="countryCode">
+              <option value="+1">Estados Unidos (+1)</option>
+              <option value="+52">México (+52)</option>
+              <option value="+34">España (+34)</option>
+              <option value="+54">Argentina (+54)</option>
+              <option value="+55">Brasil (+55)</option>
+              <option value="+56">Chile (+56)</option>
+              <option value="+57">Colombia (+57)</option>
+              <option value="+51">Perú (+51)</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="phoneNumber"><i class="fas fa-mobile-alt"></i> Número de Teléfono:</label>
+            <input id="phoneNumber" type="text" placeholder="Ej: 123456789">
+          </div>
+          
+          <div class="form-group">
+            <label for="emailAddress"><i class="fas fa-envelope"></i> Correo Electrónico:</label>
+            <input id="emailAddress" type="email" placeholder="ejemplo@correo.com">
+          </div>
+        </div>
+        
+        <div class="social-buttons">
+          <button class="social-btn whatsapp-btn-sm" onclick="shareViaWhatsApp()">
+            <i class="fab fa-whatsapp"></i> WhatsApp
+          </button>
+          <button class="social-btn twitter-btn-sm" onclick="shareViaTwitter()">
+            <i class="fab fa-twitter"></i> Twitter
+          </button>
+          <button class="social-btn sms-btn-sm" onclick="sendSMS()">
+            <i class="fas fa-sms"></i> SMS
+          </button>
+          <button class="social-btn email-btn-sm" onclick="sendEmail()">
+            <i class="fas fa-envelope"></i> Email
+          </button>
+        </div>
+        
+        <div class="info-text" style="margin-top: 15px;">
+          <a href="https://wa.me/?text=¡Echa%20un%20vistazo%20a%20esta%20increíble%20herramienta%20de%20simulación%20de%20impactos%20de%20asteroides!%20🌍%20SpaceDebris%20Impact%20Mapper%20-%20https://spacedebris-impact-mapper.com" 
+             class="whatsapp-link" target="_blank" style="font-size: 12px;">
+            <i class="fab fa-whatsapp"></i> Compartir esta aplicación por WhatsApp
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Panel de NASA Eyes on Asteroids -->
+  <div class="nasa-eyes-panel" id="nasaEyesPanel">
+    <div class="nasa-header">
+      <h3><i class="fas fa-globe-americas"></i> NASA EYES ON ASTEROIDS</h3>
+      <button class="close-btn" onclick="closeNasaEyes()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <iframe 
+      src="https://eyes.nasa.gov/apps/asteroids/#/home" 
+      class="nasa-iframe"
+      allow="fullscreen"
+      title="NASA Eyes on Asteroids">
+    </iframe>
+  </div>
+
+  <!-- Panel de Capitales del Mundo -->
+  <div class="capitals-panel" id="capitalsPanel">
+    <div class="capitals-header">
+      <h2><i class="fas fa-flag"></i> CAPITALES DEL MUNDO</h2>
+      <button class="close-btn" onclick="closeCapitalsPanel()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    
+    <div class="capitals-controls">
+      <input type="text" class="search-input" id="capitalSearch" placeholder="Buscar capital o país..." onkeyup="filterCapitals()">
+      <select class="filter-select" id="continentFilter" onchange="filterCapitals()">
+        <option value="all">Todos los continentes</option>
+        <option value="america">América</option>
+        <option value="europe">Europa</option>
+        <option value="asia">Asia</option>
+        <option value="africa">África</option>
+        <option value="oceania">Oceanía</option>
+      </select>
+    </div>
+    
+    <div class="capitals-content" id="capitalsContent">
+      <div class="loading"><i class="fas fa-globe-americas"></i> Cargando capitales del mundo...</div>
+    </div>
+  </div>
+
+  <!-- Panel de Reporte Animado -->
+  <div class="report-panel" id="reportPanel">
+    <div class="report-header">
+      <h2><i class="fas fa-chart-bar"></i> REPORTE DE IMPACTO</h2>
+      <button class="close-btn" onclick="closeReport()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="report-content">
+      <div class="report-section">
+        <h3><i class="fas fa-info-circle"></i> DATOS DE ENTRADA</h3>
+        <div class="data-grid" id="inputData">
+          <!-- Los datos se llenarán dinámicamente -->
+        </div>
+      </div>
+      
+      <div class="report-section">
+        <h3><i class="fas fa-bolt"></i> ENERGÍA DEL IMPACTO</h3>
+        <div class="data-item" id="energyData">
+          <!-- Los datos se llenarán dinámicamente -->
+        </div>
+      </div>
+      
+      <div class="report-section">
+        <h3><i class="fas fa-radiation"></i> ZONAS DE AFECTACIÓN</h3>
+        <div class="impact-zones" id="impactZones">
+          <!-- Las zonas se llenarán dinámicamente -->
+        </div>
+      </div>
+      
+      <div class="share-section">
+        <h3><i class="fas fa-share-alt"></i> COMPARTIR REPORTE</h3>
+        <div class="share-buttons">
+          <button class="share-btn whatsapp-btn" onclick="shareReportViaWhatsApp()">
+            <i class="fab fa-whatsapp"></i>
+            <span>WhatsApp</span>
+          </button>
+          <button class="share-btn sms-btn" onclick="shareReportViaSMS()">
+            <i class="fas fa-sms"></i>
+            <span>SMS</span>
+          </button>
+          <button class="share-btn email-btn" onclick="shareReportViaEmail()">
+            <i class="fas fa-envelope"></i>
+            <span>Email</span>
+          </button>
+          <button class="share-btn twitter-btn" onclick="shareReportViaTwitter()">
+            <i class="fab fa-twitter"></i>
+            <span>Twitter</span>
+          </button>
+          <button class="share-btn facebook-btn" onclick="shareReportViaFacebook()">
+            <i class="fab fa-facebook"></i>
+            <span>Facebook</span>
+          </button>
+          <button class="share-btn copy-btn" onclick="copyReportToClipboard()">
+            <i class="fas fa-copy"></i>
+            <span>Copiar</span>
+          </button>
+        </div>
+        
+        <div style="margin-top: 20px; text-align: center;">
+          <a href="https://wa.me/?text=¡Mira%20este%20increíble%20reporte%20de%20impacto%20de%20asteroide!%20🌍%20SpaceDebris%20Impact%20Mapper%20-%20https://spacedebris-impact-mapper.com" 
+             class="whatsapp-link" target="_blank" style="font-size: 14px;">
+            <i class="fab fa-whatsapp"></i> Compartir esta aplicación por WhatsApp
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contenedor de Cesium -->
+  <div id="cesiumContainer"></div>
+  
+  <script>
+    // 🔑 Token de Cesium
+    Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI2YjE4NTY0Yy02NGUzLTQ0MTEtYTU4OS0zN2U2ZjZmNzVkMTUiLCJpZCI6MzQzMzU3LCJpYXQiOjE3NTg0ODQ5MjF9.ITR2FazmRl0V_WKz7YLFqK4k3UZLtzeBRZB5xe8zLzc";
+
+    // Crear visor Cesium
+    const viewer = new Cesium.Viewer("cesiumContainer", {
+      terrain: Cesium.Terrain.fromWorldTerrain()
+    });
+
+    // Variables globales
+    let lastResult = null;
+    let asteroidData = [];
+    let defenseStrategies = [];
+    let mitigationScenarios = [];
+    let worldCapitals = [];
+
+    // Datos de capitales del mundo
+    const capitalsData = [
+      // América
+      { capital: "Washington D.C.", country: "Estados Unidos", lat: 38.9072, lon: -77.0369, continent: "america", flag: "https://flagcdn.com/w320/us.png" },
+      { capital: "Ciudad de México", country: "México", lat: 19.4326, lon: -99.1332, continent: "america", flag: "https://flagcdn.com/w320/mx.png" },
+      { capital: "Buenos Aires", country: "Argentina", lat: -34.6037, lon: -58.3816, continent: "america", flag: "https://flagcdn.com/w320/ar.png" },
+      { capital: "Brasilia", country: "Brasil", lat: -15.7975, lon: -47.8919, continent: "america", flag: "https://flagcdn.com/w320/br.png" },
+      { capital: "Ottawa", country: "Canadá", lat: 45.4215, lon: -75.6972, continent: "america", flag: "https://flagcdn.com/w320/ca.png" },
+      { capital: "Santiago", country: "Chile", lat: -33.4489, lon: -70.6693, continent: "america", flag: "https://flagcdn.com/w320/cl.png" },
+      { capital: "Bogotá", country: "Colombia", lat: 4.7110, lon: -74.0721, continent: "america", flag: "https://flagcdn.com/w320/co.png" },
+      { capital: "Lima", country: "Perú", lat: -12.0464, lon: -77.0428, continent: "america", flag: "https://flagcdn.com/w320/pe.png" },
+      
+      // Europa
+      { capital: "Madrid", country: "España", lat: 40.4168, lon: -3.7038, continent: "europe", flag: "https://flagcdn.com/w320/es.png" },
+      { capital: "París", country: "Francia", lat: 48.8566, lon: 2.3522, continent: "europe", flag: "https://flagcdn.com/w320/fr.png" },
+      { capital: "Roma", country: "Italia", lat: 41.9028, lon: 12.4964, continent: "europe", flag: "https://flagcdn.com/w320/it.png" },
+      { capital: "Berlín", country: "Alemania", lat: 52.5200, lon: 13.4050, continent: "europe", flag: "https://flagcdn.com/w320/de.png" },
+      { capital: "Londres", country: "Reino Unido", lat: 51.5074, lon: -0.1278, continent: "europe", flag: "https://flagcdn.com/w320/gb.png" },
+      { capital: "Moscú", country: "Rusia", lat: 55.7558, lon: 37.6173, continent: "europe", flag: "https://flagcdn.com/w320/ru.png" },
+      
+      // Asia
+      { capital: "Pekín", country: "China", lat: 39.9042, lon: 116.4074, continent: "asia", flag: "https://flagcdn.com/w320/cn.png" },
+      { capital: "Tokio", country: "Japón", lat: 35.6762, lon: 139.6503, continent: "asia", flag: "https://flagcdn.com/w320/jp.png" },
+      { capital: "Nueva Delhi", country: "India", lat: 28.6139, lon: 77.2090, continent: "asia", flag: "https://flagcdn.com/w320/in.png" },
+      { capital: "Seúl", country: "Corea del Sur", lat: 37.5665, lon: 126.9780, continent: "asia", flag: "https://flagcdn.com/w320/kr.png" },
+      
+      // África
+      { capital: "El Cairo", country: "Egipto", lat: 30.0444, lon: 31.2357, continent: "africa", flag: "https://flagcdn.com/w320/eg.png" },
+      { capital: "Pretoria", country: "Sudáfrica", lat: -25.7479, lon: 28.2293, continent: "africa", flag: "https://flagcdn.com/w320/za.png" },
+      { capital: "Nairobi", country: "Kenia", lat: -1.2921, lon: 36.8219, continent: "africa", flag: "https://flagcdn.com/w320/ke.png" },
+      
+      // Oceanía
+      { capital: "Canberra", country: "Australia", lat: -35.2809, lon: 149.1300, continent: "oceania", flag: "https://flagcdn.com/w320/au.png" },
+      { capital: "Wellington", country: "Nueva Zelanda", lat: -41.2865, lon: 174.7762, continent: "oceania", flag: "https://flagcdn.com/w320/nz.png" }
+    ];
+
+    // FUNCIÓN DE SIMULACIÓN CORREGIDA
+    function simulate() {
+      console.log("🚀 Iniciando simulación...");
+      
+      const data = {
+        diameter_m: parseFloat(document.getElementById("diameter").value),
+        density: parseFloat(document.getElementById("density").value),
+        velocity_kms: parseFloat(document.getElementById("velocity").value),
+        angle_deg: parseFloat(document.getElementById("angle").value),
+        lat: parseFloat(document.getElementById("lat").value),
+        lon: parseFloat(document.getElementById("lon").value)
+      };
+
+      console.log("📤 Datos de simulación:", data);
+
+      // Simulación local (sin necesidad de backend)
+      simulateLocal(data);
+    }
+
+    // Función de simulación local
+    function simulateLocal(data) {
+      // Calcular energía aproximada (E = 0.5 * m * v^2)
+      const radius = data.diameter_m / 2;
+      const volume = (4/3) * Math.PI * Math.pow(radius, 3);
+      const mass = volume * data.density; // kg
+      const energy_joules = 0.5 * mass * Math.pow(data.velocity_kms * 1000, 2);
+      
+      // Calcular radios aproximados basados en energía (fórmulas simplificadas)
+      const energy_megatons = energy_joules / (4.184 * 1e15);
+      
+      // Radios de afectación basados en energía
+      const total_destroy = Math.pow(energy_megatons, 1/3) * 2.5;
+      const severe_damage = total_destroy * 3;
+      const light_damage = severe_damage * 2;
+      
+      lastResult = {
+        energy_joules: energy_joules,
+        energy_megatons: energy_megatons,
+        radii_km: {
+          total_destroy: Math.round(total_destroy * 10) / 10,
+          severe_damage: Math.round(severe_damage * 10) / 10,
+          light_damage: Math.round(light_damage * 10) / 10
+        },
+        location: {
+          lat: data.lat,
+          lon: data.lon
+        },
+        mass: mass
+      };
+      
+      console.log("✅ Resultado de simulación:", lastResult);
+      
+      // Mostrar el impacto en el mapa
+      displayImpact(lastResult);
+      
+      // Mostrar notificación
+      showNotification("Simulación completada exitosamente!");
+    }
+
+    // Función para mostrar notificación
+    function showNotification(message) {
+      // Crear elemento de notificación
+      const notification = document.createElement('div');
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: linear-gradient(135deg, var(--success-color), #219653);
+        color: white;
+        padding: 15px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        z-index: 10000;
+        font-weight: bold;
+        animation: slideIn 0.3s ease-out;
+      `;
+      
+      notification.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <i class="fas fa-check-circle"></i>
+          <span>${message}</span>
+        </div>
+      `;
+      
+      document.body.appendChild(notification);
+      
+      // Remover después de 3 segundos
+      setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-in';
+        setTimeout(() => {
+          if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+          }
+        }, 300);
+      }, 3000);
+    }
+
+    // Función para mostrar el impacto en el mapa
+    function displayImpact(result) {
+      const lat = result.location.lat;
+      const lon = result.location.lon;
+
+      // Limpiar entidades anteriores
+      viewer.entities.removeAll();
+
+      // Crear efectos de impacto animados
+      createShockwaveAnimation(lat, lon);
+      createParticleEffect(lat, lon);
+
+      // Punto rojo del impacto
+      viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(lon, lat),
+        point: { 
+          pixelSize: 15, 
+          color: Cesium.Color.RED,
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 3
+        },
+        label: {
+          text: "EPICENTRO DEL IMPACTO",
+          font: "14pt Arial",
+          pixelOffset: new Cesium.Cartesian2(0, -30),
+          fillColor: Cesium.Color.RED,
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 3
+        }
+      });
+
+      // Colores para cada zona de daño
+      const zoneColors = {
+        "total_destroy": Cesium.Color.RED.withAlpha(0.4),
+        "severe_damage": Cesium.Color.ORANGE.withAlpha(0.3),
+        "light_damage": Cesium.Color.YELLOW.withAlpha(0.2)
+      };
+
+      const zoneLabels = {
+        "total_destroy": "DESTRUCCIÓN TOTAL",
+        "severe_damage": "DAÑO SEVERO", 
+        "light_damage": "DAÑO LEVE"
+      };
+
+      // Dibujar radios de daño
+      for (const [key, value] of Object.entries(result.radii_km)) {
+        viewer.entities.add({
+          position: Cesium.Cartesian3.fromDegrees(lon, lat),
+          ellipse: {
+            semiMinorAxis: value * 1000,
+            semiMajorAxis: value * 1000,
+            material: zoneColors[key],
+            outline: true,
+            outlineColor: zoneColors[key].withAlpha(0.8),
+            outlineWidth: 3
+          },
+          label: {
+            text: `${zoneLabels[key]}\n${value} km`,
+            font: "12pt Arial",
+            pixelOffset: new Cesium.Cartesian2(0, -value * 1000 - 5000),
+            fillColor: Cesium.Color.WHITE,
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 2,
+            showBackground: true,
+            backgroundColor: Cesium.Color.BLACK.withAlpha(0.8)
+          }
+        });
+      }
+
+      // Crear anillos animados
+      createAnimatedImpactRings(lat, lon, result.radii_km);
+
+      // Volar hacia el punto del impacto
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(lon, lat, Math.max(result.radii_km.light_damage * 2000, 100000)),
+        duration: 3
+      });
+    }
+
+    // Función para crear efecto de onda de choque animada
+    function createShockwaveAnimation(lat, lon) {
+      const position = Cesium.Cartesian3.fromDegrees(lon, lat);
+      const canvasPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, position);
+      
+      if (!canvasPosition) return;
+      
+      const shockwave = document.createElement('div');
+      shockwave.className = 'shockwave';
+      shockwave.style.left = `${canvasPosition.x}px`;
+      shockwave.style.top = `${canvasPosition.y}px`;
+      
+      document.getElementById('cesiumContainer').appendChild(shockwave);
+      
+      setTimeout(() => {
+        if (shockwave.parentNode) {
+          shockwave.parentNode.removeChild(shockwave);
+        }
+      }, 2000);
+    }
+
+    // Función para crear efecto de partículas
+    function createParticleEffect(lat, lon) {
+      const position = Cesium.Cartesian3.fromDegrees(lon, lat);
+      const canvasPosition = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, position);
+      
+      if (!canvasPosition) return;
+      
+      const particlesContainer = document.createElement('div');
+      particlesContainer.className = 'particles-container';
+      document.getElementById('cesiumContainer').appendChild(particlesContainer);
+      
+      for (let i = 0; i < 80; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'particle';
+        
+        const colors = ['#ff3232', '#ff9632', '#ffc832'];
+        particle.style.backgroundColor = colors[i % 3];
+        
+        particle.style.left = `${canvasPosition.x}px`;
+        particle.style.top = `${canvasPosition.y}px`;
+        
+        const angle = Math.random() * Math.PI * 2;
+        const distance = 80 + Math.random() * 200;
+        const tx = Math.cos(angle) * distance;
+        const ty = Math.sin(angle) * distance;
+        
+        particle.style.setProperty('--tx', `${tx}px`);
+        particle.style.setProperty('--ty', `${ty}px`);
+        
+        particlesContainer.appendChild(particle);
+        
+        setTimeout(() => {
+          if (particle.parentNode) {
+            particle.parentNode.removeChild(particle);
+          }
+        }, 1500);
+      }
+      
+      setTimeout(() => {
+        if (particlesContainer.parentNode) {
+          particlesContainer.parentNode.removeChild(particlesContainer);
+        }
+      }, 2000);
+    }
+
+    // Función para crear anillos de impacto animados en Cesium
+    function createAnimatedImpactRings(lat, lon, radii) {
+      const rings = [];
+      
+      const ringColors = [
+        Cesium.Color.RED.withAlpha(0.6),
+        Cesium.Color.ORANGE.withAlpha(0.5),
+        Cesium.Color.YELLOW.withAlpha(0.4)
+      ];
+      
+      const ringRadii = [
+        radii.total_destroy * 1000,
+        radii.severe_damage * 1000,
+        radii.light_damage * 1000
+      ];
+      
+      ringRadii.forEach((radius, index) => {
+        const ring = viewer.entities.add({
+          position: Cesium.Cartesian3.fromDegrees(lon, lat),
+          ellipse: {
+            semiMinorAxis: new Cesium.CallbackProperty(() => {
+              return radius * (1 + 0.1 * Math.sin(Date.now() / 1000));
+            }, false),
+            semiMajorAxis: new Cesium.CallbackProperty(() => {
+              return radius * (1 + 0.1 * Math.sin(Date.now() / 1000));
+            }, false),
+            material: ringColors[index],
+            outline: true,
+            outlineColor: ringColors[index].withAlpha(0.8),
+            outlineWidth: 2
+          }
+        });
+        
+        rings.push(ring);
+      });
+      
+      return rings;
+    }
+
+    // Función para abrir el panel de capitales
+    function openCapitalsPanel() {
+      const capitalsPanel = document.getElementById('capitalsPanel');
+      const overlay = document.getElementById('modalOverlay');
+      
+      // Cargar datos de capitales si no están cargados
+      if (worldCapitals.length === 0) {
+        loadCapitalsData();
+      }
+      
+      capitalsPanel.classList.add('show');
+      overlay.classList.add('show');
+    }
+
+    // Función para cerrar el panel de capitales
+    function closeCapitalsPanel() {
+      const capitalsPanel = document.getElementById('capitalsPanel');
+      const overlay = document.getElementById('modalOverlay');
+      capitalsPanel.classList.remove('show');
+      overlay.classList.remove('show');
+    }
+
+    // Función para cargar datos de capitales
+    function loadCapitalsData() {
+      worldCapitals = capitalsData;
+      displayCapitals(worldCapitals);
+    }
+
+    // Función para mostrar capitales en el panel
+    function displayCapitals(capitals) {
+      const content = document.getElementById('capitalsContent');
+      
+      if (capitals.length === 0) {
+        content.innerHTML = '<div class="loading">No se encontraron capitales que coincidan con la búsqueda</div>';
+        return;
+      }
+      
+      let html = '';
+      
+      capitals.forEach(capital => {
+        html += `
+          <div class="capital-card" onclick="flyToCapital(${capital.lat}, ${capital.lon})">
+            <div class="capital-header">
+              <img src="${capital.flag}" alt="Bandera de ${capital.country}" class="flag" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iMjUiIHZpZXdCb3g9IjAgMCA0MCAyNSIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjI1IiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjIwIiB5PSIxMyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0id2hpdGUiIGZvbnQtc2l6ZT0iOCI+JEZMQUc8L3RleHQ+Cjwvc3ZnPg=='">
+              <div>
+                <div class="capital-name">${capital.capital}</div>
+                <div class="country-name">${capital.country}</div>
+              </div>
+            </div>
+            <div class="capital-details">
+              <div class="detail-item">
+                <div class="detail-label">Latitud</div>
+                <div class="detail-value">${capital.lat.toFixed(4)}</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Longitud</div>
+                <div class="detail-value">${capital.lon.toFixed(4)}</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Continente</div>
+                <div class="detail-value">${getContinentName(capital.continent)}</div>
+              </div>
+            </div>
+            <div class="capital-actions">
+              <button class="capital-btn view-btn" onclick="event.stopPropagation(); flyToCapital(${capital.lat}, ${capital.lon})">
+                <i class="fas fa-eye"></i> Ver en mapa
+              </button>
+              <button class="capital-btn simulate-btn-sm" onclick="event.stopPropagation(); setCapitalCoordinates(${capital.lat}, ${capital.lon})">
+                <i class="fas fa-bullseye"></i> Simular aquí
+              </button>
+            </div>
+          </div>
+        `;
+      });
+      
+      content.innerHTML = html;
+    }
+
+    // Función para obtener nombre del continente
+    function getContinentName(continentCode) {
+      const continents = {
+        'america': 'América',
+        'europe': 'Europa',
+        'asia': 'Asia',
+        'africa': 'África',
+        'oceania': 'Oceanía'
+      };
+      return continents[continentCode] || continentCode;
+    }
+
+    // Función para filtrar capitales
+    function filterCapitals() {
+      const searchTerm = document.getElementById('capitalSearch').value.toLowerCase();
+      const continentFilter = document.getElementById('continentFilter').value;
+      
+      let filtered = worldCapitals.filter(capital => {
+        const matchesSearch = capital.capital.toLowerCase().includes(searchTerm) || 
+                            capital.country.toLowerCase().includes(searchTerm);
+        const matchesContinent = continentFilter === 'all' || capital.continent === continentFilter;
+        
+        return matchesSearch && matchesContinent;
+      });
+      
+      displayCapitals(filtered);
+    }
+
+    // Función para volar a una capital en el mapa
+    function flyToCapital(lat, lon) {
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(lon, lat, 500000),
+        duration: 2
+      });
+      
+      // Cerrar el panel después de seleccionar
+      closeCapitalsPanel();
+    }
+
+    // Función para establecer coordenadas de una capital en el formulario
+    function setCapitalCoordinates(lat, lon) {
+      document.getElementById('lat').value = lat;
+      document.getElementById('lon').value = lon;
+      
+      // Cerrar el panel después de seleccionar
+      closeCapitalsPanel();
+      
+      // Mostrar mensaje de confirmación
+      console.log(`📍 Coordenadas establecidas: ${lat}, ${lon}`);
+    }
+
+    // Función para alternar paneles desplegables
+    function togglePanel(panelId) {
+      const panel = document.getElementById(panelId);
+      panel.classList.toggle('collapsed');
+    }
+
+    // Función para abrir NASA Eyes on Asteroids
+    function openNasaEyes() {
+      const nasaPanel = document.getElementById('nasaEyesPanel');
+      const overlay = document.getElementById('modalOverlay');
+      nasaPanel.classList.add('show');
+      overlay.classList.add('show');
+    }
+
+    // Función para cerrar NASA Eyes on Asteroids
+    function closeNasaEyes() {
+      const nasaPanel = document.getElementById('nasaEyesPanel');
+      const overlay = document.getElementById('modalOverlay');
+      nasaPanel.classList.remove('show');
+      overlay.classList.remove('show');
+    }
+
+    // Función para abrir el reporte animado
+    function openReport() {
+      if (!lastResult) {
+        alert("Primero ejecuta una simulación para generar reportes");
+        return;
+      }
+
+      const reportPanel = document.getElementById('reportPanel');
+      const overlay = document.getElementById('modalOverlay');
+      
+      // Llenar el reporte con datos
+      fillReportData();
+      
+      // Mostrar con animación
+      reportPanel.classList.add('show');
+      overlay.classList.add('show');
+    }
+
+    // Función para cerrar el reporte
+    function closeReport() {
+      const reportPanel = document.getElementById('reportPanel');
+      const overlay = document.getElementById('modalOverlay');
+      reportPanel.classList.remove('show');
+      overlay.classList.remove('show');
+    }
+
+    // Función para cerrar todos los modales
+    function closeAllModals() {
+      closeNasaEyes();
+      closeReport();
+      closeCapitalsPanel();
+    }
+
+    // Función para llenar el reporte con datos
+    function fillReportData() {
+      // Datos de entrada
+      const inputDataHtml = `
+        <div class="data-item"><strong>Diámetro:</strong> ${document.getElementById("diameter").value} m</div>
+        <div class="data-item"><strong>Densidad:</strong> ${document.getElementById("density").value} kg/m³</div>
+        <div class="data-item"><strong>Velocidad:</strong> ${document.getElementById("velocity").value} km/s</div>
+        <div class="data-item"><strong>Ángulo:</strong> ${document.getElementById("angle").value}°</div>
+        <div class="data-item"><strong>Latitud:</strong> ${document.getElementById("lat").value}</div>
+        <div class="data-item"><strong>Longitud:</strong> ${document.getElementById("lon").value}</div>
+      `;
+      document.getElementById('inputData').innerHTML = inputDataHtml;
+
+      // Datos de energía
+      const energyDataHtml = `
+        <strong>Energía liberada:</strong> ${lastResult.energy_megatons.toFixed(2)} Megatones de TNT
+        <br><small>(${lastResult.energy_joules.toExponential(2)} Julios)</small>
+        <br><strong>Masa del impactor:</strong> ${(lastResult.mass / 1000).toFixed(0)} toneladas
+      `;
+      document.getElementById('energyData').innerHTML = energyDataHtml;
+
+      // Zonas de afectación
+      const impactZonesHtml = `
+        <div class="zone zone-total">
+          <div class="zone-info">
+            <div class="zone-radius">${lastResult.radii_km.total_destroy} km</div>
+            <div class="zone-desc">DESTRUCCIÓN TOTAL</div>
+          </div>
+          <i class="fas fa-skull-crossbones"></i>
+        </div>
+        <div class="zone zone-severe">
+          <div class="zone-info">
+            <div class="zone-radius">${lastResult.radii_km.severe_damage} km</div>
+            <div class="zone-desc">DAÑO SEVERO</div>
+          </div>
+          <i class="fas fa-house-damage"></i>
+        </div>
+        <div class="zone zone-light">
+          <div class="zone-info">
+            <div class="zone-radius">${lastResult.radii_km.light_damage} km</div>
+            <div class="zone-desc">DAÑO LEVE</div>
+          </div>
+          <i class="fas fa-exclamation-triangle"></i>
+        </div>
+      `;
+      document.getElementById('impactZones').innerHTML = impactZonesHtml;
+    }
+
+    // Funciones de compartir desde el reporte
+    function shareReportViaWhatsApp() {
+      const message = generateShareMessage();
+      const encodedMessage = encodeURIComponent(message);
+      window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+    }
+
+    function shareReportViaSMS() {
+      const countryCode = document.getElementById('countryCode').value;
+      const phoneNumber = document.getElementById('phoneNumber').value;
+      
+      if (!phoneNumber) {
+        alert("Por favor ingresa un número de teléfono en el panel de Intercambio Social");
+        return;
+      }
+      
+      const message = generateShareMessage();
+      const smsLink = `sms:${countryCode}${phoneNumber}?body=${encodeURIComponent(message)}`;
+      window.location.href = smsLink;
+    }
+
+    function shareReportViaEmail() {
+      const emailAddress = document.getElementById('emailAddress').value;
+      
+      if (!emailAddress) {
+        alert("Por favor ingresa un correo electrónico en el panel de Intercambio Social");
+        return;
+      }
+      
+      const subject = "🌍 Reporte de Simulación de Impacto de Meteorito";
+      const body = generateShareMessage();
+      
+      const mailtoLink = `mailto:${emailAddress}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.location.href = mailtoLink;
+    }
+
+    function shareReportViaTwitter() {
+      const tweetText = `🌍 Simulación de impacto de meteorito - Energía: ${lastResult.energy_megatons.toFixed(2)} Megatones #SpaceDebris #NASA`;
+      const encodedText = encodeURIComponent(tweetText);
+      window.open(`https://twitter.com/intent/tweet?text=${encodedText}`, '_blank');
+    }
+
+    function shareReportViaFacebook() {
+      const message = generateShareMessage();
+      const encodedMessage = encodeURIComponent("Reporte de Simulación de Impacto de Meteorito");
+      window.open(`https://www.facebook.com/sharer/sharer.php?quote=${encodedMessage}`, '_blank');
+    }
+
+    function copyReportToClipboard() {
+      const message = generateShareMessage();
+      navigator.clipboard.writeText(message).then(() => {
+        alert("Reporte copiado al portapapeles");
+      }).catch(err => {
+        console.error('Error al copiar: ', err);
+        alert("Error al copiar el reporte");
+      });
+    }
+
+    function generateShareMessage() {
+      return `🌍 REPORTE DE IMPACTO DE METEORITO\n\n` +
+             `DATOS DE ENTRADA:\n` +
+             `• Diámetro: ${document.getElementById("diameter").value} m\n` +
+             `• Densidad: ${document.getElementById("density").value} kg/m³\n` +
+             `• Velocidad: ${document.getElementById("velocity").value} km/s\n` +
+             `• Ángulo: ${document.getElementById("angle").value}°\n` +
+             `• Ubicación: ${document.getElementById("lat").value}, ${document.getElementById("lon").value}\n\n` +
+             `ENERGÍA DEL IMPACTO:\n` +
+             `• ${lastResult.energy_megatons.toFixed(2)} Megatones de TNT\n` +
+             `• Masa: ${(lastResult.mass / 1000).toFixed(0)} toneladas\n\n` +
+             `ZONAS DE AFECTACIÓN:\n` +
+             `• Destrucción total: ${lastResult.radii_km.total_destroy} km\n` +
+             `• Daño severo: ${lastResult.radii_km.severe_damage} km\n` +
+             `• Daño leve: ${lastResult.radii_km.light_damage} km\n\n` +
+             `Simulado con SpaceDebris Impact Mapper\n` +
+             `Fecha: ${new Date().toLocaleString()}`;
+    }
+
+    // Funciones de intercambio social del panel lateral
+    function shareViaWhatsApp() {
+      if (!lastResult) {
+        alert("Primero ejecuta una simulación para compartir resultados");
+        return;
+      }
+      
+      const message = `🌍 ALERTA DE IMPACTO DE METEORITO\n\n` +
+                     `Ubicación: ${lastResult.location.lat}, ${lastResult.location.lon}\n` +
+                     `Energía: ${lastResult.energy_megatons.toFixed(2)} Megatones\n` +
+                     `Zona destrucción: ${lastResult.radii_km.total_destroy} km\n\n` +
+                     `Simulado con SpaceDebris Impact Mapper`;
+      
+      const encodedMessage = encodeURIComponent(message);
+      window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+    }
+
+    function shareViaTwitter() {
+      if (!lastResult) {
+        alert("Primero ejecuta una simulación para compartir resultados");
+        return;
+      }
+      
+      const tweetText = `🌍 Simulación de impacto de meteorito - Energía: ${lastResult.energy_megatons.toFixed(2)} Megatones #SpaceDebris #NASA`;
+      const encodedText = encodeURIComponent(tweetText);
+      window.open(`https://twitter.com/intent/tweet?text=${encodedText}`, '_blank');
+    }
+
+    function sendSMS() {
+      const countryCode = document.getElementById('countryCode').value;
+      const phoneNumber = document.getElementById('phoneNumber').value;
+      
+      if (!phoneNumber) {
+        alert("Por favor ingresa un número de teléfono");
+        return;
+      }
+      
+      if (!lastResult) {
+        alert("Primero ejecuta una simulación para enviar SMS");
+        return;
+      }
+      
+      const message = `Alerta impacto: ${lastResult.location.lat}, ${lastResult.location.lon}. Energía: ${lastResult.energy_megatons.toFixed(2)}Mt. Zona afectada: ${lastResult.radii_km.total_destroy}km`;
+      
+      // Usar servicio de SMS Link (funciona en móviles)
+      const smsLink = `sms:${countryCode}${phoneNumber}?body=${encodeURIComponent(message)}`;
+      window.location.href = smsLink;
+    }
+
+    function sendEmail() {
+      const emailAddress = document.getElementById('emailAddress').value;
+      
+      if (!emailAddress) {
+        alert("Por favor ingresa una dirección de correo electrónico");
+        return;
+      }
+      
+      if (!lastResult) {
+        alert("Primero ejecuta una simulación para enviar email");
+        return;
+      }
+      
+      const subject = "🌍 Reporte de Simulación de Impacto de Meteorito";
+      const body = `Reporte de Simulación de Impacto\n\n` +
+                  `Ubicación: ${lastResult.location.lat}, ${lastResult.location.lon}\n` +
+                  `Energía liberada: ${lastResult.energy_megatons.toFixed(2)} Megatones de TNT\n` +
+                  `Zonas de afectación:\n` +
+                  `- Destrucción total: ${lastResult.radii_km.total_destroy} km\n` +
+                  `- Daño severo: ${lastResult.radii_km.severe_damage} km\n` +
+                  `- Daño leve: ${lastResult.radii_km.light_damage} km\n\n` +
+                  `Simulado con SpaceDebris Impact Mapper\n` +
+                  `Fecha: ${new Date().toLocaleString()}`;
+      
+      const mailtoLink = `mailto:${emailAddress}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.location.href = mailtoLink;
+    }
+
+    // Función para cargar datos de asteroides de NASA API
+    async function loadAsteroidData() {
+      const asteroidsList = document.getElementById('asteroidsList');
+      asteroidsList.innerHTML = '<div class="loading"><i class="fas fa-satellite-dish"></i> Cargando datos de NASA...</div>';
+      
+      try {
+        // NASA NeoWs API (Near Earth Object Web Service)
+        const response = await fetch('https://api.nasa.gov/neo/rest/v1/feed?api_key=DEMO_KEY');
+        const data = await response.json();
+        
+        asteroidData = [];
+        let asteroidsHtml = '';
+        
+        // Procesar asteroides de los próximos 7 días
+        Object.values(data.near_earth_objects).forEach(dayAsteroids => {
+          dayAsteroids.forEach(asteroid => {
+            const diameter = asteroid.estimated_diameter.meters.estimated_diameter_max;
+            const velocity = asteroid.close_approach_data[0]?.relative_velocity.kilometers_per_second || 15;
+            const missDistance = asteroid.close_approach_data[0]?.miss_distance.kilometers || 0;
+            const isHazardous = asteroid.is_potentially_hazardous_asteroid;
+            
+            asteroidData.push({
+              name: asteroid.name,
+              diameter: diameter,
+              velocity: parseFloat(velocity),
+              missDistance: parseFloat(missDistance),
+              hazardous: isHazardous,
+              date: asteroid.close_approach_data[0]?.close_approach_date || 'N/A'
+            });
+          });
+        });
+        
+        // Ordenar por peligrosidad y tomar los 10 más relevantes
+        asteroidData.sort((a, b) => {
+          if (a.hazardous && !b.hazardous) return -1;
+          if (!a.hazardous && b.hazardous) return 1;
+          return a.missDistance - b.missDistance;
+        });
+        
+        // Generar HTML para cada asteroide
+        asteroidData.slice(0, 10).forEach(asteroid => {
+          const riskClass = asteroid.hazardous ? 'risk-high' : 
+                           asteroid.missDistance < 10000000 ? 'risk-medium' : 'risk-low';
+          
+          asteroidsHtml += `
+            <div class="asteroid-item ${riskClass}" onclick="loadAsteroidToForm('${asteroid.name}')">
+              <div class="asteroid-name"><i class="fas fa-meteor"></i> ${asteroid.name}</div>
+              <div class="asteroid-data">
+                <div class="data-label">Diámetro:</div>
+                <div class="data-value">${asteroid.diameter.toFixed(0)} m</div>
+                
+                <div class="data-label">Velocidad:</div>
+                <div class="data-value">${asteroid.velocity.toFixed(1)} km/s</div>
+                
+                <div class="data-label">Distancia:</div>
+                <div class="data-value">${(asteroid.missDistance / 1000000).toFixed(2)}M km</div>
+                
+                <div class="data-label">Peligroso:</div>
+                <div class="data-value ${asteroid.hazardous ? 'hazardous' : 'safe'}">
+                  ${asteroid.hazardous ? '⚠️ SÍ' : '✅ NO'}
+                </div>
+              </div>
+            </div>
+          `;
+        });
+        
+        asteroidsList.innerHTML = asteroidsHtml;
+        
+      } catch (error) {
+        console.error('Error cargando datos de asteroides:', error);
+        // Datos de ejemplo si falla la API
+        loadSampleAsteroidData();
+      }
+    }
+
+    // Función para cargar datos de ejemplo de asteroides
+    function loadSampleAsteroidData() {
+      const sampleAsteroids = [
+        { name: "2023 TL", diameter: 45, velocity: 18.2, missDistance: 4500000, hazardous: true },
+        { name: "2024 AB", diameter: 120, velocity: 15.8, missDistance: 12000000, hazardous: false },
+        { name: "2023 XR", diameter: 28, velocity: 20.1, missDistance: 2800000, hazardous: true },
+        { name: "2024 CD", diameter: 85, velocity: 16.5, missDistance: 8500000, hazardous: false },
+        { name: "Bennu", diameter: 490, velocity: 12.4, missDistance: 300000, hazardous: true }
+      ];
+      
+      let asteroidsHtml = '';
+      sampleAsteroids.forEach(asteroid => {
+        const riskClass = asteroid.hazardous ? 'risk-high' : 'risk-low';
+        
+        asteroidsHtml += `
+          <div class="asteroid-item ${riskClass}" onclick="loadAsteroidToForm('${asteroid.name}')">
+            <div class="asteroid-name"><i class="fas fa-meteor"></i> ${asteroid.name}</div>
+            <div class="asteroid-data">
+              <div class="data-label">Diámetro:</div>
+              <div class="data-value">${asteroid.diameter} m</div>
+              
+              <div class="data-label">Velocidad:</div>
+              <div class="data-value">${asteroid.velocity} km/s</div>
+              
+              <div class="data-label">Distancia:</div>
+              <div class="data-value">${(asteroid.missDistance / 1000000).toFixed(1)}M km</div>
+              
+              <div class="data-label">Peligroso:</div>
+              <div class="data-value ${asteroid.hazardous ? 'hazardous' : 'safe'}">
+                ${asteroid.hazardous ? '⚠️ SÍ' : '✅ NO'}
+              </div>
+            </div>
+          </div>
+        `;
+      });
+      
+      document.getElementById('asteroidsList').innerHTML = asteroidsHtml;
+    }
+
+    // Función para cargar estrategias de defensa planetaria
+    async function loadDefenseStrategies() {
+      const strategiesContainer = document.getElementById('defenseStrategies');
+      strategiesContainer.innerHTML = '<div class="loading"><i class="fas fa-shield-alt"></i> Cargando estrategias de NASA...</div>';
+      
+      try {
+        // Simulamos datos basados en información pública de NASA
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        defenseStrategies = [
+          {
+            title: "DART Mission",
+            description: "Double Asteroid Redirection Test - Primera misión de defensa planetaria que demostró la capacidad de cambiar la trayectoria de un asteroide.",
+            effectiveness: "Alta",
+            readiness: "Probada"
+          },
+          {
+            title: "Kinetic Impactor",
+            description: "Uso de una nave espacial para impactar contra el asteroide y cambiar su velocidad y trayectoria.",
+            effectiveness: "Media-Alta",
+            readiness: "Tecnología disponible"
+          },
+          {
+            title: "Gravity Tractor",
+            description: "Nave espacial que vuela cerca del asteroide usando su gravedad para alterar gradualmente su órbita.",
+            effectiveness: "Media",
+            readiness: "En desarrollo"
+          }
+        ];
+        
+        let strategiesHtml = '';
+        defenseStrategies.forEach(strategy => {
+          strategiesHtml += `
+            <div class="strategy-item">
+              <div class="strategy-title"><i class="fas fa-rocket"></i> ${strategy.title}</div>
+              <div class="strategy-desc">${strategy.description}</div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 5px; font-size: 9px;">
+                <div><strong>Efectividad:</strong> ${strategy.effectiveness}</div>
+                <div><strong>Disponibilidad:</strong> ${strategy.readiness}</div>
+              </div>
+            </div>
+          `;
+        });
+        
+        strategiesContainer.innerHTML = strategiesHtml;
+        
+      } catch (error) {
+        console.error('Error cargando estrategias de defensa:', error);
+        strategiesContainer.innerHTML = '<div class="loading">❌ Error cargando estrategias. Intenta nuevamente.</div>';
+      }
+    }
+
+    // Función para cargar escenarios de mitigación
+    async function loadMitigationScenarios() {
+      const scenariosContainer = document.getElementById('mitigationScenarios');
+      scenariosContainer.innerHTML = '<div class="loading"><i class="fas fa-bullseye"></i> Cargando escenarios de NASA...</div>';
+      
+      try {
+        // Simulamos datos de escenarios de mitigación
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        mitigationScenarios = [
+          {
+            title: "Impacto Oceánico",
+            description: "Simulación de impacto en océano profundo, generando tsunamis de hasta 100m de altura en zonas costeras.",
+            affectedArea: "Zonas costeras hasta 100km",
+            evacuation: "Evacuación de 50M personas"
+          },
+          {
+            title: "Impacto Urbano",
+            description: "Impacto directo en área metropolitana, destrucción total en radio de 50km.",
+            affectedArea: "Radio de 200km",
+            evacuation: "Evacuación de 10M personas"
+          },
+          {
+            title: "Impacto Desértico",
+            description: "Impacto en zona desértica, generando onda de choque y lluvia de escombros.",
+            affectedArea: "Radio de 500km",
+            evacuation: "Evacuación de 2M personas"
+          }
+        ];
+        
+        let scenariosHtml = '';
+        mitigationScenarios.forEach(scenario => {
+          scenariosHtml += `
+            <div class="scenario-item">
+              <div class="scenario-title"><i class="fas fa-water"></i> ${scenario.title}</div>
+              <div class="scenario-desc">${scenario.description}</div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 5px; font-size: 9px;">
+                <div><strong>Área afectada:</strong> ${scenario.affectedArea}</div>
+                <div><strong>Evacuación:</strong> ${scenario.evacuation}</div>
+              </div>
+            </div>
+          `;
+        });
+        
+        scenariosContainer.innerHTML = scenariosHtml;
+        
+      } catch (error) {
+        console.error('Error cargando escenarios de mitigación:', error);
+        scenariosContainer.innerHTML = '<div class="loading">❌ Error cargando escenarios. Intenta nuevamente.</div>';
+      }
+    }
+
+    // Función para cargar datos de asteroide al formulario
+    function loadAsteroidToForm(asteroidName) {
+      const asteroid = asteroidData.find(a => a.name === asteroidName) || 
+                      { diameter: 50, velocity: 17, hazardous: false };
+      
+      document.getElementById('diameter').value = Math.round(asteroid.diameter);
+      document.getElementById('velocity').value = asteroid.velocity.toFixed(1);
+      document.getElementById('density').value = asteroid.hazardous ? 3500 : 2500;
+      
+      // Coordenadas aleatorias para simulación
+      const lat = (Math.random() * 180 - 90).toFixed(1);
+      const lon = (Math.random() * 360 - 180).toFixed(1);
+      document.getElementById('lat').value = lat;
+      document.getElementById('lon').value = lon;
+      
+      console.log(`📥 Asteroide "${asteroidName}" cargado en formulario`);
+    }
+
+    // Función para mostrar/ocultar panel de desarrolladores
+    function toggleDevelopers() {
+      alert("SPACEDREBIS MAPPER TEAM\n• Miguel Angel BORJA PARRA (Dev Backend/UX/UI)\n• Sheylhi Danitza MEDRANO JARA (Dev UX/UI)\n• Alexies Cesar MUÑOZ SANTIAGO (API Integrator)\n• Imer Gamaliel FLORES INOCENTE (API Integrator) \n• CREDITS: Luigi Hampol BORJA PARRA (Geological data analyst)");
+    }
+
+    // Manejar click en el mapa para cambiar coordenadas
+    viewer.cesiumWidget.screenSpaceEventHandler.setInputAction(function onLeftClick(event) {
+      const pickedPosition = viewer.camera.pickEllipsoid(event.position, viewer.scene.globe.ellipsoid);
+      if (Cesium.defined(pickedPosition)) {
+        const cartographic = Cesium.Cartographic.fromCartesian(pickedPosition);
+        const lat = Cesium.Math.toDegrees(cartographic.latitude);
+        const lon = Cesium.Math.toDegrees(cartographic.longitude);
+        
+        document.getElementById('lat').value = lat.toFixed(4);
+        document.getElementById('lon').value = lon.toFixed(4);
+        
+        console.log(`📍 Coordenadas actualizadas: ${lat.toFixed(4)}, ${lon.toFixed(4)}`);
+      }
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+    // Inicializar al cargar la página
+    window.addEventListener('load', function() {
+      console.log("🌍 SpaceDebris Impact Mapper iniciado");
+      
+      // Cargar datos iniciales
+      loadAsteroidData();
+      loadDefenseStrategies();
+      loadMitigationScenarios();
+      
+      // Ejecutar simulación inicial después de 1 segundo
+      setTimeout(() => {
+        simulate();
+      }, 1000);
+      
+      // Actualizar datos cada 5 minutos
+      setInterval(loadAsteroidData, 300000);
+    });
+  </script>
+</body>
+</html>
